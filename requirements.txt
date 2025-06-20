@@ -1,2 +1,12 @@
 
-PyPDF2==1.28.6
+# Legacy PDF processing (replaced by PyMuPDF)
+# PyPDF2==1.28.6
+
+# Modern ebook processing
+pymupdf>=1.24.0
+ebooklib>=0.18
+beautifulsoup4>=4.12.0
+ocrmypdf>=16.0.0
+
+# Logging and utilities
+loguru>=0.7.0
