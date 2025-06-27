@@ -19,18 +19,56 @@ venv.bak/
 # macOS
 .DS_Store
 
-# Audio output files
+# Audio output files (exclude test/demo audio)
 *.mp3
 *.wav
 *.m4a
 *.flac
+*_test.mp3
+*_test.wav
+demo_*.mp3
+demo_*.wav
+test_*.mp3
+test_*.wav
+mvp_*.mp3
+mvp_*.wav
 
 # Text files that might be generated during processing
 *.txt
 !requirements.txt
 !README.txt
+!LICENSE.txt
+extracted_text.txt
+test_book.txt
+
+# Development and test files
+demo_*.py
+test_*.py
+*_test.py
+*_demo.py
+simple_*.py
+convert.py
+pdf_to_audio.py
+ebook2audio_simple.py
+
+# Development documentation
+*_SETUP.md
+*_INTEGRATION.md
+git-push-helper.sh
+setup-ssh.sh
+
+# Platform specific
+replit.nix
 
 # Temporary files
 temp/
 tmp/
 *.tmp
+
+# Sample books and media (keep only in docs/examples/)
+*.pdf
+*.epub
+*.mobi
+*.azw*
+!docs/examples/*.pdf
+!docs/examples/*.epub
