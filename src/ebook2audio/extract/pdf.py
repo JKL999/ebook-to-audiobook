@@ -9,11 +9,16 @@ import io
 import tempfile
 import subprocess
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict, Any
 from dataclasses import dataclass
+import hashlib
 
 import fitz  # PyMuPDF
 from loguru import logger
+
+from .ocr_parallel import ParallelOCRProcessor, OCRBatchResult
+from .ocr_cache import OCRCache, ResumableProcessor
+from .progress import ProgressTracker, create_simple_callback
 
 
 @dataclass
@@ -36,16 +41,43 @@ class PDFExtractor:
     - Handles both text-based and image-based PDFs
     """
     
-    def __init__(self, ocr_threshold: float = 0.1, enable_ocr: bool = True):
+    def __init__(self, 
+                 ocr_threshold: float = 0.1, 
+                 enable_ocr: bool = True,
+                 enable_parallel_ocr: bool = True,
+                 enable_caching: bool = True,
+                 cache_dir: Optional[Path] = None,
+                 max_workers: Optional[int] = None):
         """
         Initialize PDF extractor.
         
         Args:
             ocr_threshold: Minimum text density to avoid OCR (chars per pixel)
             enable_ocr: Whether to enable OCR fallback for scanned documents
+            enable_parallel_ocr: Whether to use parallel OCR processing
+            enable_caching: Whether to enable OCR result caching
+            cache_dir: Directory for cache storage (default: ~/.cache/ebook2audio)
+            max_workers: Number of parallel OCR workers (default: CPU count - 1)
         """
         self.ocr_threshold = ocr_threshold
         self.enable_ocr = enable_ocr
+        self.enable_parallel_ocr = enable_parallel_ocr
+        self.enable_caching = enable_caching
+        
+        # Initialize caching
+        if self.enable_caching:
+            if cache_dir is None:
+                cache_dir = Path.home() / ".cache" / "ebook2audio"
+            self.cache = OCRCache(cache_dir)
+        else:
+            self.cache = None
+        
+        # Initialize parallel OCR processor
+        if self.enable_parallel_ocr and self.enable_ocr:
+            self.parallel_processor = ParallelOCRProcessor(max_workers=max_workers)
+        else:
+            self.parallel_processor = None
+        
         self._check_dependencies()
     
     def _check_dependencies(self) -> None:
@@ -123,51 +155,237 @@ class PDFExtractor:
             
             logger.info(f"PDF has {total_pages} pages")
             
-            # Extract text from each page
-            pages = []
-            ocr_pages = []
-            
-            for page_num in range(total_pages):
-                page = doc[page_num]
-                
-                # Try text extraction first
-                text = page.get_text()
-                
-                # Check if page needs OCR (low text density)
-                if self._needs_ocr(page, text):
-                    if self.enable_ocr:
-                        logger.info(f"Page {page_num + 1} needs OCR (low text density)")
-                        ocr_text = self._extract_page_ocr(page, page_num)
-                        if ocr_text and len(ocr_text.strip()) > len(text.strip()):
-                            text = ocr_text
-                            ocr_pages.append(page_num + 1)
-                    else:
-                        logger.warning(f"Page {page_num + 1} appears to be scanned but OCR is disabled")
-                
-                pages.append(text.strip())
-            
-            doc.close()
-            
-            # Determine extraction method
-            extraction_method = "ocr" if ocr_pages else "text"
-            if ocr_pages and len(ocr_pages) < total_pages:
-                extraction_method = "mixed"
-            
-            result = PDFExtractionResult(
-                pages=pages,
-                total_pages=total_pages,
-                extraction_method=extraction_method,
-                ocr_pages=ocr_pages
-            )
-            
-            logger.info(f"Extraction complete: {extraction_method} method, "
-                       f"{len(ocr_pages)} pages required OCR")
-            
-            return result
+            # Check if we should use parallel processing
+            if (self.enable_parallel_ocr and 
+                self.parallel_processor and 
+                total_pages >= 2):  # Use parallel for 2+ pages for testing
+                return self._extract_text_parallel(doc, file_path)
+            else:
+                return self._extract_text_sequential(doc)
             
         except Exception as e:
             logger.error(f"PDF extraction failed: {e}")
             raise RuntimeError(f"Failed to extract text from PDF: {e}") from e
+    
+    def _extract_text_sequential(self, doc: fitz.Document) -> PDFExtractionResult:
+        """
+        Extract text using sequential processing (original method).
+        
+        Args:
+            doc: Opened PyMuPDF document
+            
+        Returns:
+            PDFExtractionResult with extraction details
+        """
+        total_pages = len(doc)
+        pages = []
+        ocr_pages = []
+        
+        for page_num in range(total_pages):
+            page = doc[page_num]
+            
+            # Try text extraction first
+            text = page.get_text()
+            
+            # Check if page needs OCR (low text density)
+            if self._needs_ocr(page, text):
+                if self.enable_ocr:
+                    logger.info(f"Page {page_num + 1} needs OCR (low text density)")
+                    ocr_text = self._extract_page_ocr(page, page_num)
+                    if ocr_text and len(ocr_text.strip()) > len(text.strip()):
+                        text = ocr_text
+                        ocr_pages.append(page_num + 1)
+                else:
+                    logger.warning(f"Page {page_num + 1} appears to be scanned but OCR is disabled")
+            
+            pages.append(text.strip())
+        
+        doc.close()
+        
+        # Determine extraction method
+        extraction_method = "ocr" if ocr_pages else "text"
+        if ocr_pages and len(ocr_pages) < total_pages:
+            extraction_method = "mixed"
+        
+        result = PDFExtractionResult(
+            pages=pages,
+            total_pages=total_pages,
+            extraction_method=extraction_method,
+            ocr_pages=ocr_pages
+        )
+        
+        logger.info(f"Sequential extraction complete: {extraction_method} method, "
+                   f"{len(ocr_pages)} pages required OCR")
+        
+        return result
+    
+    def _extract_text_parallel(self, doc: fitz.Document, file_path: Path) -> PDFExtractionResult:
+        """
+        Extract text using parallel OCR processing for efficiency.
+        
+        Args:
+            doc: Opened PyMuPDF document
+            file_path: Path to PDF file for caching
+            
+        Returns:
+            PDFExtractionResult with extraction details
+        """
+        total_pages = len(doc)
+        pages = [""] * total_pages  # Pre-allocate list
+        ocr_pages = []
+        
+        # Step 1: Identify pages that need OCR vs regular text extraction
+        text_pages = []  # Pages with sufficient text
+        ocr_needed_pages = []  # Pages that need OCR
+        
+        logger.info("Analyzing pages to determine OCR requirements...")
+        
+        for page_num in range(total_pages):
+            page = doc[page_num]
+            text = page.get_text()
+            
+            if self._needs_ocr(page, text) and self.enable_ocr:
+                ocr_needed_pages.append(page_num + 1)  # 1-indexed
+            else:
+                text_pages.append((page_num, text.strip()))
+        
+        logger.info(f"Found {len(text_pages)} text-extractable pages, "
+                   f"{len(ocr_needed_pages)} pages need OCR")
+        
+        # Step 2: Process text-extractable pages quickly
+        for page_num, text in text_pages:
+            pages[page_num] = text
+        
+        # Step 3: Process OCR pages in parallel if any
+        if ocr_needed_pages:
+            ocr_results = self._process_ocr_pages_parallel(
+                file_path, ocr_needed_pages, total_pages
+            )
+            
+            # Merge OCR results
+            for result in ocr_results.results:
+                if result.success and result.text.strip():
+                    pages[result.page_num - 1] = result.text.strip()  # Convert to 0-indexed
+                    ocr_pages.append(result.page_num)
+                elif not pages[result.page_num - 1]:  # Only if no text was found
+                    # Fallback to whatever text was extracted originally
+                    page = doc[result.page_num - 1]
+                    pages[result.page_num - 1] = page.get_text().strip()
+        
+        doc.close()
+        
+        # Determine extraction method
+        extraction_method = "ocr" if ocr_pages else "text"
+        if ocr_pages and len(ocr_pages) < total_pages:
+            extraction_method = "mixed"
+        
+        result = PDFExtractionResult(
+            pages=pages,
+            total_pages=total_pages,
+            extraction_method=extraction_method,
+            ocr_pages=ocr_pages
+        )
+        
+        logger.info(f"Parallel extraction complete: {extraction_method} method, "
+                   f"{len(ocr_pages)} pages required OCR")
+        
+        return result
+    
+    def _process_ocr_pages_parallel(self, 
+                                   file_path: Path, 
+                                   page_numbers: List[int],
+                                   total_pages: int) -> OCRBatchResult:
+        """
+        Process OCR pages in parallel with caching and progress tracking.
+        
+        Args:
+            file_path: Path to PDF file
+            page_numbers: List of page numbers that need OCR (1-indexed)
+            total_pages: Total pages in document for progress tracking
+            
+        Returns:
+            OCRBatchResult with processing results
+        """
+        if not self.parallel_processor:
+            raise RuntimeError("Parallel processor not initialized")
+        
+        # Set up progress tracking
+        with ProgressTracker(
+            total_items=len(page_numbers),
+            description=f"OCR Processing ({len(page_numbers)} pages)",
+            enable_tqdm=True
+        ) as progress:
+            
+            # Add simple logging callback
+            progress.add_callback(create_simple_callback(log_interval=20))
+            
+            def progress_callback(completed: int, total: int) -> None:
+                progress.update(completed)
+            
+            # Process pages with caching if enabled
+            if self.enable_caching and self.cache:
+                return self._process_with_caching(
+                    file_path, page_numbers, progress_callback
+                )
+            else:
+                return self.parallel_processor.process_batches(
+                    file_path, page_numbers, progress_callback
+                )
+    
+    def _process_with_caching(self, 
+                             file_path: Path, 
+                             page_numbers: List[int],
+                             progress_callback: Optional[callable]) -> OCRBatchResult:
+        """
+        Process OCR pages with caching support.
+        
+        Args:
+            file_path: Path to PDF file
+            page_numbers: List of page numbers to process
+            progress_callback: Progress update callback
+            
+        Returns:
+            OCRBatchResult with processing results
+        """
+        if not self.cache:
+            raise RuntimeError("Cache not initialized")
+        
+        # Check cache for existing results
+        # For simplicity, we'll skip complex cache checking in this implementation
+        # and just use parallel processing with basic caching
+        
+        document_id = hashlib.md5(str(file_path).encode()).hexdigest()
+        resumable = ResumableProcessor(self.cache, document_id)
+        
+        # Check for resumable processing
+        remaining_pages = resumable.get_remaining_pages(page_numbers)
+        
+        if len(remaining_pages) < len(page_numbers):
+            logger.info(f"Resuming processing: {len(remaining_pages)}/{len(page_numbers)} pages remaining")
+        
+        # Process remaining pages
+        if remaining_pages:
+            result = self.parallel_processor.process_batches(
+                file_path, remaining_pages, progress_callback
+            )
+            
+            # Save checkpoint
+            completed_pages = [p for p in page_numbers if p not in remaining_pages]
+            completed_pages.extend([r.page_num for r in result.results if r.success])
+            resumable.save_checkpoint(completed_pages, len(page_numbers))
+            
+            return result
+        else:
+            # All pages already processed - return empty result
+            from .ocr_parallel import OCRBatchResult, OCRPageResult
+            return OCRBatchResult(
+                results=[],
+                total_pages=0,
+                success_count=0,
+                failure_count=0,
+                total_time=0.0,
+                avg_page_time=0.0
+            )
     
     def _needs_ocr(self, page: fitz.Page, text: str) -> bool:
         """

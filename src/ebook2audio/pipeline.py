@@ -18,6 +18,8 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any, Callable, Union
 from dataclasses import dataclass
 from enum import Enum
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
 
 try:
     from pydub import AudioSegment
@@ -88,6 +90,8 @@ class ConversionConfig:
     # Processing settings
     add_silence_between_chunks: float = 0.5  # seconds
     normalize_audio: bool = True
+    parallel_synthesis: bool = True
+    max_workers: int = 4  # Number of concurrent TTS workers
     
     # Output settings
     output_filename: Optional[str] = None
@@ -379,12 +383,32 @@ class AudioBookPipeline:
             raise RuntimeError(f"Failed to chunk text: {e}")
     
     def _synthesize_audio(self, text_chunks: List[TextChunk]) -> List[Path]:
-        """Synthesize audio for all text chunks."""
+        """Synthesize audio for all text chunks with resume capability and parallel processing."""
         logger.info(f"Synthesizing audio for {len(text_chunks)} chunks")
         
         if not PYDUB_AVAILABLE:
             raise RuntimeError("pydub is required for audio processing. Install with: pip install pydub")
         
+        # Setup temp directory
+        temp_dir = self.config.temp_dir or Path(tempfile.mkdtemp())
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Check for existing chunks (resume capability)
+        existing_chunks = self._scan_existing_chunks(temp_dir, len(text_chunks))
+        skipped_count = len(existing_chunks)
+        
+        if skipped_count > 0:
+            logger.info(f"Found {skipped_count} existing audio chunks, resuming synthesis from chunk {skipped_count}")
+        
+        # Choose synthesis method based on configuration
+        if self.config.parallel_synthesis and len(text_chunks) - skipped_count > 1:
+            return self._synthesize_audio_parallel(text_chunks, temp_dir, existing_chunks, skipped_count)
+        else:
+            return self._synthesize_audio_sequential(text_chunks, temp_dir, existing_chunks, skipped_count)
+    
+    def _synthesize_audio_sequential(self, text_chunks: List[TextChunk], temp_dir: Path, 
+                                   existing_chunks: List[Path], skipped_count: int) -> List[Path]:
+        """Sequential synthesis (original method)."""
         # Get voice
         try:
             voice = get_voice(self.config.voice_id)
@@ -392,16 +416,25 @@ class AudioBookPipeline:
             raise RuntimeError(f"Failed to get voice '{self.config.voice_id}': {e}")
         
         # Setup progress tracking
+        remaining_chunks = len(text_chunks) - skipped_count
         self.progress_manager.start("Synthesizing Audio")
-        task_id = self.progress_manager.add_task("synthesis", "Synthesizing chunks...", len(text_chunks))
+        task_id = self.progress_manager.add_task("synthesis", 
+                                                f"Synthesizing chunks (resuming from {skipped_count})...", 
+                                                remaining_chunks)
         
-        audio_files = []
-        temp_dir = self.config.temp_dir or Path(tempfile.mkdtemp())
+        audio_files = list(existing_chunks)  # Start with existing chunks
         
         try:
             for i, chunk in enumerate(text_chunks):
-                # Generate audio for chunk
                 chunk_audio_path = temp_dir / f"chunk_{i:04d}.mp3"
+                
+                # Skip if chunk already exists
+                if chunk_audio_path.exists() and chunk_audio_path.stat().st_size > 0:
+                    chunk.audio_path = chunk_audio_path
+                    if chunk_audio_path not in audio_files:
+                        audio_files.append(chunk_audio_path)
+                        self.temp_files.append(chunk_audio_path)
+                    continue
                 
                 try:
                     synthesized_path = voice.synthesize(chunk.text, chunk_audio_path)
@@ -409,28 +442,178 @@ class AudioBookPipeline:
                         chunk.audio_path = synthesized_path
                         audio_files.append(synthesized_path)
                         self.temp_files.append(synthesized_path)
+                        logger.debug(f"Synthesized chunk {i}")
                     else:
                         logger.warning(f"Failed to synthesize chunk {i}")
                         
                 except Exception as e:
                     logger.error(f"Error synthesizing chunk {i}: {e}")
                 
-                # Update progress
-                self.progress_manager.update_task(task_id, advance=1)
+                # Update progress only for newly processed chunks
+                if i >= skipped_count:
+                    self.progress_manager.update_task(task_id, advance=1)
             
-            logger.info(f"Successfully synthesized {len(audio_files)} audio chunks")
+            logger.info(f"Successfully synthesized {len(audio_files)} total audio chunks ({len(audio_files) - skipped_count} new, {skipped_count} resumed)")
             return audio_files
             
         finally:
             self.progress_manager.stop()
     
+    def _synthesize_audio_parallel(self, text_chunks: List[TextChunk], temp_dir: Path, 
+                                 existing_chunks: List[Path], skipped_count: int) -> List[Path]:
+        """Parallel synthesis using ThreadPoolExecutor for improved performance."""
+        logger.info(f"Using parallel synthesis with {self.config.max_workers} workers")
+        
+        # Setup progress tracking
+        remaining_chunks = len(text_chunks) - skipped_count
+        self.progress_manager.start("Synthesizing Audio (Parallel)")
+        task_id = self.progress_manager.add_task("synthesis", 
+                                                f"Parallel synthesis (resuming from {skipped_count})...", 
+                                                remaining_chunks)
+        
+        # Initialize results array with existing chunks
+        audio_files = [None] * len(text_chunks)
+        for i, chunk_path in enumerate(existing_chunks):
+            audio_files[i] = chunk_path
+            self.temp_files.append(chunk_path)
+        
+        # Create list of chunks that need synthesis
+        chunks_to_process = []
+        for i, chunk in enumerate(text_chunks):
+            chunk_audio_path = temp_dir / f"chunk_{i:04d}.mp3"
+            if not (chunk_audio_path.exists() and chunk_audio_path.stat().st_size > 0):
+                chunks_to_process.append((i, chunk, chunk_audio_path))
+        
+        # Thread-safe progress counter
+        progress_lock = threading.Lock()
+        completed_count = 0
+        
+        def synthesize_chunk(chunk_data):
+            """Worker function for parallel synthesis with provider fallback."""
+            nonlocal completed_count
+            i, chunk, chunk_audio_path = chunk_data
+            
+            try:
+                # Primary synthesis attempt
+                voice = get_voice(self.config.voice_id)
+                synthesized_path = voice.synthesize(chunk.text, chunk_audio_path)
+                
+                if synthesized_path and synthesized_path.exists():
+                    chunk.audio_path = synthesized_path
+                    logger.debug(f"Synthesized chunk {i} with primary voice")
+                    
+                    with progress_lock:
+                        nonlocal completed_count
+                        completed_count += 1
+                        self.progress_manager.update_task(task_id, advance=1)
+                    
+                    return i, synthesized_path
+                else:
+                    # Try fallback if primary fails
+                    return self._try_fallback_synthesis(i, chunk, chunk_audio_path, progress_lock, task_id)
+                    
+            except Exception as e:
+                logger.warning(f"Primary synthesis failed for chunk {i}: {e}")
+                # Try fallback on exception
+                return self._try_fallback_synthesis(i, chunk, chunk_audio_path, progress_lock, task_id)
+        
+        try:
+            # Process chunks in parallel
+            with ThreadPoolExecutor(max_workers=self.config.max_workers) as executor:
+                # Submit all tasks
+                future_to_chunk = {executor.submit(synthesize_chunk, chunk_data): chunk_data 
+                                 for chunk_data in chunks_to_process}
+                
+                # Collect results as they complete
+                for future in as_completed(future_to_chunk):
+                    chunk_data = future_to_chunk[future]
+                    try:
+                        chunk_index, synthesized_path = future.result()
+                        if synthesized_path:
+                            audio_files[chunk_index] = synthesized_path
+                            self.temp_files.append(synthesized_path)
+                    except Exception as e:
+                        logger.error(f"Exception in worker thread: {e}")
+            
+            # Filter out None values and ensure proper ordering
+            final_audio_files = [f for f in audio_files if f is not None]
+            
+            new_chunks = len(final_audio_files) - skipped_count
+            logger.info(f"Successfully synthesized {len(final_audio_files)} total audio chunks ({new_chunks} new, {skipped_count} resumed)")
+            return final_audio_files
+            
+        finally:
+            self.progress_manager.stop()
+    
+    def _scan_existing_chunks(self, temp_dir: Path, total_chunks: int) -> List[Path]:
+        """Scan for existing audio chunks that can be reused for resume capability."""
+        existing_chunks = []
+        
+        for i in range(total_chunks):
+            chunk_path = temp_dir / f"chunk_{i:04d}.mp3"
+            if chunk_path.exists() and chunk_path.stat().st_size > 0:
+                existing_chunks.append(chunk_path)
+            else:
+                # Stop at first missing chunk to maintain sequence
+                break
+        
+        return existing_chunks
+    
+    def _try_fallback_synthesis(self, chunk_index: int, chunk: TextChunk, chunk_audio_path: Path, 
+                               progress_lock: threading.Lock, task_id) -> tuple:
+        """Attempt synthesis with fallback provider (pyttsx3)."""
+        try:
+            # Try pyttsx3 as fallback - use a more generic approach
+            from .voices.pyttsx3_provider import SystemTTSProvider
+            from .voices.base import Voice, VoiceMetadata, TTSEngine
+            
+            # Create a basic system voice directly
+            system_provider = SystemTTSProvider()
+            if system_provider.initialize():
+                # Create a basic voice metadata for system TTS
+                voice_metadata = VoiceMetadata(
+                    voice_id="system_fallback",
+                    display_name="System TTS Fallback",
+                    engine=TTSEngine.PYTTSX3,
+                    language="en"
+                )
+                fallback_voice = Voice(voice_metadata, system_provider)
+            else:
+                logger.error(f"System TTS provider not available for fallback")
+                return chunk_index, None
+            synthesized_path = fallback_voice.synthesize(chunk.text, chunk_audio_path)
+            
+            if synthesized_path and synthesized_path.exists():
+                chunk.audio_path = synthesized_path
+                logger.info(f"Synthesized chunk {chunk_index} with fallback voice (pyttsx3)")
+                
+                with progress_lock:
+                    self.progress_manager.update_task(task_id, advance=1)
+                
+                return chunk_index, synthesized_path
+            else:
+                logger.error(f"Fallback synthesis also failed for chunk {chunk_index}")
+                return chunk_index, None
+                
+        except Exception as e:
+            logger.error(f"Fallback synthesis failed for chunk {chunk_index}: {e}")
+            return chunk_index, None
+    
     def _concatenate_audio(self, audio_files: List[Path], output_path: Path) -> Path:
-        """Concatenate audio files into final audiobook."""
+        """Concatenate audio files into final audiobook with memory-efficient streaming."""
         logger.info(f"Concatenating {len(audio_files)} audio files")
         
         if not audio_files:
             raise RuntimeError("No audio files to concatenate")
         
+        # For large audiobooks, use streaming concatenation to avoid memory issues
+        if len(audio_files) > 100:  # Large audiobook threshold
+            return self._concatenate_audio_streaming(audio_files, output_path)
+        else:
+            return self._concatenate_audio_memory(audio_files, output_path)
+    
+    def _concatenate_audio_memory(self, audio_files: List[Path], output_path: Path) -> Path:
+        """Memory-based concatenation for smaller audiobooks (original method)."""
         try:
             # Load first audio file
             combined_audio = AudioSegment.from_file(str(audio_files[0]))
@@ -467,6 +650,75 @@ class AudioBookPipeline:
             
         except Exception as e:
             raise RuntimeError(f"Failed to concatenate audio: {e}")
+    
+    def _concatenate_audio_streaming(self, audio_files: List[Path], output_path: Path) -> Path:
+        """Streaming concatenation for large audiobooks to minimize memory usage."""
+        import subprocess
+        import tempfile
+        
+        try:
+            logger.info(f"Using streaming concatenation for large audiobook ({len(audio_files)} chunks)")
+            
+            # Ensure output directory exists
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Create temporary file list for ffmpeg
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+                filelist_path = Path(f.name)
+                
+                # Add silence between chunks if configured
+                silence_duration = self.config.add_silence_between_chunks
+                
+                for i, audio_file in enumerate(audio_files):
+                    # Write the audio file
+                    f.write(f"file '{audio_file.absolute()}'\n")
+                    
+                    # Add silence between chunks (except after the last chunk)
+                    if i < len(audio_files) - 1 and silence_duration > 0:
+                        # Create a temporary silence file
+                        silence_file = audio_file.parent / f"silence_{i}.mp3"
+                        silence_audio = AudioSegment.silent(duration=int(silence_duration * 1000))
+                        silence_audio.export(str(silence_file), format="mp3")
+                        f.write(f"file '{silence_file.absolute()}'\n")
+            
+            # Build ffmpeg command for concatenation
+            ffmpeg_cmd = [
+                'ffmpeg', '-f', 'concat', '-safe', '0', '-i', str(filelist_path),
+                '-c', 'copy',  # Copy without re-encoding for speed
+                '-y',  # Overwrite output file
+                str(output_path)
+            ]
+            
+            # If format conversion is needed, add encoding parameters
+            if self.config.output_format != "mp3":
+                ffmpeg_cmd.extend(['-f', self.config.output_format])
+            
+            if self.config.output_format == "mp3":
+                ffmpeg_cmd.extend(['-b:a', self.config.bitrate])
+            
+            # Execute ffmpeg
+            logger.info("Running ffmpeg for streaming concatenation...")
+            result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True, timeout=3600)
+            
+            if result.returncode != 0:
+                raise RuntimeError(f"ffmpeg failed: {result.stderr}")
+            
+            # Clean up temporary files
+            filelist_path.unlink()
+            
+            # Clean up silence files
+            for i in range(len(audio_files) - 1):
+                silence_file = audio_files[0].parent / f"silence_{i}.mp3"
+                if silence_file.exists():
+                    silence_file.unlink()
+            
+            logger.info(f"Successfully concatenated {len(audio_files)} chunks to {output_path}")
+            return output_path
+            
+        except Exception as e:
+            # Fallback to memory-based concatenation if streaming fails
+            logger.warning(f"Streaming concatenation failed, falling back to memory concatenation: {e}")
+            return self._concatenate_audio_memory(audio_files, output_path)
     
     def _get_audio_duration(self, audio_path: Path) -> Optional[float]:
         """Get duration of audio file in seconds."""

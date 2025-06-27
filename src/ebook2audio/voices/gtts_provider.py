@@ -7,6 +7,8 @@ which offers high-quality voices with internet connectivity required.
 
 import logging
 import tempfile
+import time
+import random
 from pathlib import Path
 from typing import List, Optional
 from io import BytesIO
@@ -79,7 +81,7 @@ class GoogleTTSProvider(BaseTTSProvider):
     
     def synthesize(self, text: str, voice: Voice, output_path: Optional[Path] = None) -> Optional[Path]:
         """
-        Synthesize speech using gTTS.
+        Synthesize speech using gTTS with intelligent rate limiting and retry logic.
         
         Args:
             text: Text to synthesize
@@ -96,42 +98,68 @@ class GoogleTTSProvider(BaseTTSProvider):
         if not text.strip():
             logger.warning("Empty text provided for synthesis")
             return None
-            
-        try:
-            # Get language and TLD from voice metadata
-            lang = voice.metadata.language
-            tld = voice.metadata.get_engine_specific_config('tld', 'com')
-            slow = voice.metadata.get_engine_specific_config('slow', False)
-            
-            # Create gTTS instance
-            tts = gTTS(text=text, lang=lang, slow=slow, tld=tld)
-            
-            # Generate output path if not provided
-            if output_path is None:
-                output_path = Path(tempfile.mktemp(suffix='.mp3'))
-            else:
-                output_path = Path(output_path)
-                output_path.parent.mkdir(parents=True, exist_ok=True)
-            
-            # Save audio to file
-            tts.save(str(output_path))
-            
-            # Convert to target sample rate if specified
-            target_sample_rate = voice.metadata.sample_rate
-            if target_sample_rate and target_sample_rate != 22050:  # gTTS default is ~22kHz
-                try:
-                    audio = AudioSegment.from_mp3(str(output_path))
-                    audio = audio.set_frame_rate(target_sample_rate)
-                    audio.export(str(output_path), format="mp3")
-                except Exception as e:
-                    logger.warning(f"Failed to adjust sample rate: {e}")
-            
-            logger.info(f"Successfully synthesized audio to {output_path}")
-            return output_path
-            
-        except Exception as e:
-            logger.error(f"Failed to synthesize with gTTS: {e}")
-            return None
+        
+        # Generate output path if not provided
+        if output_path is None:
+            output_path = Path(tempfile.mktemp(suffix='.mp3'))
+        else:
+            output_path = Path(output_path)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Retry configuration
+        max_retries = 3
+        base_delay = 1.0  # Base delay in seconds
+        max_delay = 30.0  # Maximum delay in seconds
+        
+        for attempt in range(max_retries + 1):
+            try:
+                # Get language and TLD from voice metadata
+                lang = voice.metadata.language
+                tld = voice.metadata.get_engine_specific_config('tld', 'com')
+                slow = voice.metadata.get_engine_specific_config('slow', False)
+                
+                # Create gTTS instance
+                tts = gTTS(text=text, lang=lang, slow=slow, tld=tld)
+                
+                # Save audio to file with rate limiting awareness
+                tts.save(str(output_path))
+                
+                # Convert to target sample rate if specified
+                target_sample_rate = voice.metadata.sample_rate
+                if target_sample_rate and target_sample_rate != 22050:  # gTTS default is ~22kHz
+                    try:
+                        audio = AudioSegment.from_mp3(str(output_path))
+                        audio = audio.set_frame_rate(target_sample_rate)
+                        audio.export(str(output_path), format="mp3")
+                    except Exception as e:
+                        logger.warning(f"Failed to adjust sample rate: {e}")
+                
+                logger.debug(f"Successfully synthesized audio to {output_path}")
+                return output_path
+                
+            except Exception as e:
+                error_msg = str(e).lower()
+                
+                # Check if this is a rate limiting error
+                if any(indicator in error_msg for indicator in [
+                    'rate limit', 'quota', 'too many requests', '429', 'service unavailable'
+                ]):
+                    if attempt < max_retries:
+                        # Calculate exponential backoff with jitter
+                        delay = min(base_delay * (2 ** attempt) + random.uniform(0, 1), max_delay)
+                        logger.warning(f"Rate limit hit, retrying in {delay:.1f}s (attempt {attempt + 1}/{max_retries + 1})")
+                        time.sleep(delay)
+                        continue
+                    else:
+                        logger.error(f"Rate limit exceeded after {max_retries + 1} attempts: {e}")
+                        return None
+                else:
+                    # Non-rate-limit error, don't retry
+                    logger.error(f"Failed to synthesize with gTTS: {e}")
+                    return None
+        
+        logger.error(f"Failed to synthesize after {max_retries + 1} attempts")
+        return None
     
     def preview_voice(self, voice: Voice, preview_text: str = "Hello, this is a preview of this voice.") -> Optional[Path]:
         """Generate a preview sample for a gTTS voice."""
