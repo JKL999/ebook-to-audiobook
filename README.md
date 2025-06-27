@@ -287,6 +287,23 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - 📖 **Documentation**: This README and inline code documentation
 - 💡 **Feature Requests**: Open an issue with the "enhancement" label
 
+## 🔮 Future Vision: Custom Voice Cloning
+
+The next major evolution of this project will integrate **state-of-the-art voice cloning technology** to eliminate API rate limits and provide unlimited, personalized audiobook generation.
+
+### **Coming in Phase 3: Voice Cloning Integration**
+- **🎯 Train Custom Voices**: Create personalized narrators from 1-minute audio samples
+- **⚡ Local Processing**: Eliminate API rate limits with local GPU acceleration  
+- **🎨 Professional Quality**: 80-95% voice similarity using GPT-SoVITS/XTTS v2
+- **💰 Cost Efficient**: No ongoing API costs, unlimited audiobook generation
+- **🔒 Privacy First**: All processing stays local on your hardware
+
+**Hardware Requirements:**
+- **Training**: RTX 3070+ or similar (8GB+ VRAM)
+- **Inference**: M3 MacBook Air or CPU-optimized models
+
+**See [ROADMAP.md](ROADMAP.md) for detailed implementation plan and technology research.**
+
 ---
 
 **🎯 Ready to convert your ebook library to audiobooks?**
