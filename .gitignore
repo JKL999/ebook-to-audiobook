@@ -1,0 +1,36 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE files
+.vscode/
+.idea/
+
+# macOS
+.DS_Store
+
+# Audio output files
+*.mp3
+*.wav
+*.m4a
+*.flac
+
+# Text files that might be generated during processing
+*.txt
+!requirements.txt
+!README.txt
+
+# Temporary files
+temp/
+tmp/
+*.tmp
