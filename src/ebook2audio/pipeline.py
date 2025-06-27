@@ -565,7 +565,7 @@ class AudioBookPipeline:
         try:
             # Try pyttsx3 as fallback - use a more generic approach
             from .voices.pyttsx3_provider import SystemTTSProvider
-            from .voices.base import Voice, VoiceMetadata, TTSEngine
+            from .voices.base import Voice, VoiceMetadata, TTSEngine, VoiceType
             
             # Create a basic system voice directly
             system_provider = SystemTTSProvider()
@@ -573,7 +573,9 @@ class AudioBookPipeline:
                 # Create a basic voice metadata for system TTS
                 voice_metadata = VoiceMetadata(
                     voice_id="system_fallback",
-                    display_name="System TTS Fallback",
+                    name="System TTS Fallback",
+                    description="Offline system TTS fallback",
+                    voice_type=VoiceType.BUILTIN,
                     engine=TTSEngine.PYTTSX3,
                     language="en"
                 )
