@@ -50,7 +50,28 @@ def get_voice_manager() -> VoiceManager:
     global _voice_manager
     if _voice_manager is None:
         _voice_manager = VoiceManager()
+        # Register TTS providers
+        _initialize_providers(_voice_manager)
     return _voice_manager
+
+def _initialize_providers(voice_manager: VoiceManager) -> None:
+    """Initialize and register TTS providers."""
+    try:
+        # Import and register Google TTS provider
+        from .gtts_provider import GoogleTTSProvider
+        gtts_provider = GoogleTTSProvider()
+        if gtts_provider.initialize():
+            voice_manager.register_provider(gtts_provider)
+        
+        # Import and register System TTS provider
+        from .pyttsx3_provider import SystemTTSProvider
+        system_provider = SystemTTSProvider()
+        if system_provider.initialize():
+            voice_manager.register_provider(system_provider)
+            
+    except Exception as e:
+        from loguru import logger
+        logger.warning(f"Failed to initialize some TTS providers: {e}")
 
 def list_voices() -> dict:
     """List all available voices (built-in and custom)."""

@@ -121,83 +121,22 @@ class VoiceCatalog:
     
     def _create_default_catalog(self) -> Dict[str, Any]:
         """Create default voice catalog structure."""
+        from .builtin import BUILTIN_VOICES, VOICE_COLLECTIONS
+        
+        # Convert built-in voices to dict format
+        builtin_voices_dict = {}
+        for voice_id, voice_metadata in BUILTIN_VOICES.items():
+            builtin_voices_dict[voice_id] = voice_metadata.to_dict()
+        
         return {
             "metadata": {
                 "version": "1.0.0",
                 "last_updated": datetime.now().isoformat(),
                 "description": "Ebook2Audio Voice Catalog"
             },
-            "built_in_voices": {
-                "en_us_vctk_16": {
-                    "voice_id": "en_us_vctk_16",
-                    "name": "English US (VCTK-16)",
-                    "description": "High-quality English (US) voice using VCTK corpus speaker 16",
-                    "voice_type": "builtin",
-                    "engine": "xtts",
-                    "language": "en",
-                    "accent": "us",
-                    "quality": "high",
-                    "sample_rate": 22050,
-                    "gender": "female",
-                    "age_range": "adult",
-                    "speaking_style": "neutral",
-                    "engine_config": {
-                        "temperature": 0.75,
-                        "length_penalty": 1.0,
-                        "repetition_penalty": 1.1
-                    }
-                },
-                "en_uk_vctk_92": {
-                    "voice_id": "en_uk_vctk_92",
-                    "name": "English UK (VCTK-92)",
-                    "description": "High-quality British English voice using VCTK corpus speaker 92",
-                    "voice_type": "builtin",
-                    "engine": "xtts",
-                    "language": "en",
-                    "accent": "uk",
-                    "quality": "high",
-                    "sample_rate": 22050,
-                    "gender": "male",
-                    "age_range": "adult",
-                    "speaking_style": "neutral",
-                    "engine_config": {
-                        "temperature": 0.75,
-                        "length_penalty": 1.0,
-                        "repetition_penalty": 1.1
-                    }
-                },
-                "bark_speaker_v2_en_0": {
-                    "voice_id": "bark_speaker_v2_en_0",
-                    "name": "Bark English Speaker 0",
-                    "description": "Expressive English voice using Bark TTS",
-                    "voice_type": "builtin",
-                    "engine": "bark",
-                    "language": "en",
-                    "accent": "us",
-                    "quality": "medium",
-                    "sample_rate": 24000,
-                    "gender": "neutral",
-                    "age_range": "adult",
-                    "speaking_style": "expressive",
-                    "engine_config": {
-                        "text_temp": 0.7,
-                        "waveform_temp": 0.7
-                    }
-                }
-            },
+            "built_in_voices": builtin_voices_dict,
             "custom_voices": {},
-            "voice_collections": {
-                "default": {
-                    "name": "Default Voices",
-                    "description": "Recommended voices for general use",
-                    "voices": ["en_us_vctk_16", "en_uk_vctk_92"]
-                },
-                "expressive": {
-                    "name": "Expressive Voices",
-                    "description": "Voices with emotional expression",
-                    "voices": ["bark_speaker_v2_en_0"]
-                }
-            }
+            "voice_collections": VOICE_COLLECTIONS
         }
     
     def _validate_catalog_structure(self) -> None:

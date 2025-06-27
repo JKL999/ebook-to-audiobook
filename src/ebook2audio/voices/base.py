@@ -29,6 +29,8 @@ class TTSEngine(Enum):
     BARK = "bark"
     OPENVOICE = "openvoice"  
     TORTOISE = "tortoise"
+    GTTS = "gtts"
+    PYTTSX3 = "pyttsx3"
 
 
 class VoiceQuality(Enum):

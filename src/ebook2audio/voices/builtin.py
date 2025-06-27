@@ -241,6 +241,183 @@ BUILTIN_VOICES: Dict[str, VoiceMetadata] = {
             "voice_diversity_intelligibility_slider": 0.5,
             "voice_fixer": True
         }
+    ),
+    
+    # Google TTS (gTTS) Built-in Voices
+    "gtts_en_us": VoiceMetadata(
+        voice_id="gtts_en_us",
+        name="Google TTS English (US)",
+        description="High-quality English (US) voice using Google Text-to-Speech. Requires internet connection.",
+        voice_type=VoiceType.BUILTIN,
+        engine=TTSEngine.GTTS,
+        language="en",
+        accent="us",
+        quality=VoiceQuality.HIGH,
+        sample_rate=22050,
+        gender="neutral",
+        age_range="adult",
+        speaking_style="natural",
+        engine_config={
+            "tld": "com",
+            "slow": False
+        }
+    ),
+    
+    "gtts_en_uk": VoiceMetadata(
+        voice_id="gtts_en_uk",
+        name="Google TTS English (UK)",
+        description="High-quality British English voice using Google Text-to-Speech. Requires internet connection.",
+        voice_type=VoiceType.BUILTIN,
+        engine=TTSEngine.GTTS,
+        language="en",
+        accent="uk",
+        quality=VoiceQuality.HIGH,
+        sample_rate=22050,
+        gender="neutral",
+        age_range="adult",
+        speaking_style="natural",
+        engine_config={
+            "tld": "co.uk",
+            "slow": False
+        }
+    ),
+    
+    "gtts_en_au": VoiceMetadata(
+        voice_id="gtts_en_au",
+        name="Google TTS English (AU)",
+        description="High-quality Australian English voice using Google Text-to-Speech. Requires internet connection.",
+        voice_type=VoiceType.BUILTIN,
+        engine=TTSEngine.GTTS,
+        language="en",
+        accent="au",
+        quality=VoiceQuality.HIGH,
+        sample_rate=22050,
+        gender="neutral",
+        age_range="adult",
+        speaking_style="natural",
+        engine_config={
+            "tld": "com.au",
+            "slow": False
+        }
+    ),
+    
+    "gtts_es": VoiceMetadata(
+        voice_id="gtts_es",
+        name="Google TTS Spanish",
+        description="High-quality Spanish voice using Google Text-to-Speech. Requires internet connection.",
+        voice_type=VoiceType.BUILTIN,
+        engine=TTSEngine.GTTS,
+        language="es",
+        accent="neutral",
+        quality=VoiceQuality.HIGH,
+        sample_rate=22050,
+        gender="neutral",
+        age_range="adult",
+        speaking_style="natural",
+        engine_config={
+            "tld": "es",
+            "slow": False
+        }
+    ),
+    
+    "gtts_fr": VoiceMetadata(
+        voice_id="gtts_fr",
+        name="Google TTS French",
+        description="High-quality French voice using Google Text-to-Speech. Requires internet connection.",
+        voice_type=VoiceType.BUILTIN,
+        engine=TTSEngine.GTTS,
+        language="fr",
+        accent="neutral",
+        quality=VoiceQuality.HIGH,
+        sample_rate=22050,
+        gender="neutral",
+        age_range="adult",
+        speaking_style="natural",
+        engine_config={
+            "tld": "fr",
+            "slow": False
+        }
+    ),
+    
+    # System TTS (pyttsx3) Built-in Voices
+    "system_en_default": VoiceMetadata(
+        voice_id="system_en_default",
+        name="System English Default",
+        description="Default system English voice using pyttsx3. Works offline with system TTS engines.",
+        voice_type=VoiceType.BUILTIN,
+        engine=TTSEngine.PYTTSX3,
+        language="en",
+        accent="system",
+        quality=VoiceQuality.MEDIUM,
+        sample_rate=22050,
+        gender="neutral",
+        age_range="adult",
+        speaking_style="neutral",
+        engine_config={
+            "rate": 200,
+            "volume": 0.9,
+            "system_voice_id": None  # Auto-select best match
+        }
+    ),
+    
+    "system_en_female": VoiceMetadata(
+        voice_id="system_en_female",
+        name="System English Female",
+        description="Female system English voice using pyttsx3. Works offline with system TTS engines.",
+        voice_type=VoiceType.BUILTIN,
+        engine=TTSEngine.PYTTSX3,
+        language="en",
+        accent="system",
+        quality=VoiceQuality.MEDIUM,
+        sample_rate=22050,
+        gender="female",
+        age_range="adult",
+        speaking_style="neutral",
+        engine_config={
+            "rate": 200,
+            "volume": 0.9,
+            "system_voice_id": None  # Auto-select female voice
+        }
+    ),
+    
+    "system_en_male": VoiceMetadata(
+        voice_id="system_en_male",
+        name="System English Male",
+        description="Male system English voice using pyttsx3. Works offline with system TTS engines.",
+        voice_type=VoiceType.BUILTIN,
+        engine=TTSEngine.PYTTSX3,
+        language="en",
+        accent="system",
+        quality=VoiceQuality.MEDIUM,
+        sample_rate=22050,
+        gender="male",
+        age_range="adult",
+        speaking_style="neutral",
+        engine_config={
+            "rate": 200,
+            "volume": 0.9,
+            "system_voice_id": None  # Auto-select male voice
+        }
+    ),
+    
+    "system_en_slow": VoiceMetadata(
+        voice_id="system_en_slow",
+        name="System English Slow",
+        description="Slower system English voice for better comprehension. Works offline with system TTS engines.",
+        voice_type=VoiceType.BUILTIN,
+        engine=TTSEngine.PYTTSX3,
+        language="en",
+        accent="system",
+        quality=VoiceQuality.MEDIUM,
+        sample_rate=22050,
+        gender="neutral",
+        age_range="adult",
+        speaking_style="deliberate",
+        engine_config={
+            "rate": 150,
+            "volume": 0.9,
+            "system_voice_id": None
+        }
     )
 }
 
@@ -249,12 +426,12 @@ VOICE_COLLECTIONS = {
     "default": {
         "name": "Default Voices",
         "description": "Recommended voices for general use",
-        "voices": ["en_us_vctk_16", "en_uk_vctk_92", "bark_speaker_v2_en_narrator"]
+        "voices": ["gtts_en_us", "system_en_default", "en_us_vctk_16", "bark_speaker_v2_en_narrator"]
     },
     "high_quality": {
         "name": "High Quality Voices", 
         "description": "Best quality voices for professional audiobooks",
-        "voices": ["tortoise_angie", "tortoise_tom", "en_us_vctk_16", "en_uk_vctk_92"]
+        "voices": ["tortoise_angie", "tortoise_tom", "gtts_en_us", "gtts_en_uk", "en_us_vctk_16", "en_uk_vctk_92"]
     },
     "expressive": {
         "name": "Expressive Voices",
@@ -264,17 +441,32 @@ VOICE_COLLECTIONS = {
     "fast": {
         "name": "Fast Synthesis",
         "description": "Voices optimized for speed",
-        "voices": ["en_us_vctk_16", "bark_speaker_v2_en_0", "openvoice_v1_en_default"]
+        "voices": ["gtts_en_us", "system_en_default", "en_us_vctk_16", "bark_speaker_v2_en_0"]
+    },
+    "offline": {
+        "name": "Offline Voices",
+        "description": "Voices that work without internet connection",
+        "voices": ["system_en_default", "system_en_female", "system_en_male", "en_us_vctk_16", "bark_speaker_v2_en_narrator"]
+    },
+    "online": {
+        "name": "Online Voices", 
+        "description": "High-quality voices requiring internet connection",
+        "voices": ["gtts_en_us", "gtts_en_uk", "gtts_en_au", "gtts_es", "gtts_fr"]
     },
     "multilingual": {
         "name": "Multi-language Support",
         "description": "Voices supporting multiple languages",
-        "voices": ["es_vctk_79", "bark_speaker_v2_en_0"]
+        "voices": ["gtts_es", "gtts_fr", "es_vctk_79", "bark_speaker_v2_en_0"]
     },
     "audiobook": {
         "name": "Audiobook Optimized",
         "description": "Voices specifically optimized for long-form narration",
-        "voices": ["tortoise_angie", "tortoise_tom", "bark_speaker_v2_en_narrator", "en_us_vctk_16"]
+        "voices": ["tortoise_angie", "tortoise_tom", "gtts_en_us", "bark_speaker_v2_en_narrator", "system_en_slow"]
+    },
+    "simple": {
+        "name": "Simple TTS",
+        "description": "Easy-to-use TTS engines with minimal setup",
+        "voices": ["gtts_en_us", "gtts_en_uk", "system_en_default", "system_en_female", "system_en_male"]
     }
 }
 
@@ -445,10 +637,17 @@ def get_voice_by_characteristics(
 
 # Default voice mappings for common use cases
 DEFAULT_VOICES = {
-    "english_us_female": "en_us_vctk_16",
-    "english_uk_male": "en_uk_vctk_92", 
+    "english_us_female": "system_en_female",
+    "english_uk_male": "gtts_en_uk", 
     "english_expressive": "bark_speaker_v2_en_narrator",
     "high_quality_female": "tortoise_angie",
     "high_quality_male": "tortoise_tom",
-    "fast_synthesis": "openvoice_v1_en_default"
+    "fast_synthesis": "gtts_en_us",
+    "offline_default": "system_en_default",
+    "online_default": "gtts_en_us",
+    "simple_female": "system_en_female",
+    "simple_male": "system_en_male",
+    "google_us": "gtts_en_us",
+    "google_uk": "gtts_en_uk",
+    "system_default": "system_en_default"
 }

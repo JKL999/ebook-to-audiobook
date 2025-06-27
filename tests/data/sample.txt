@@ -1,0 +1,5 @@
+This is a sample text file for testing the ebook2audio converter.
+
+It contains multiple paragraphs to test text extraction and chunking functionality.
+
+The converter should be able to handle this text and convert it to audio using various TTS engines.

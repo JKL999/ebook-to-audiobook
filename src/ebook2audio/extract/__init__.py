@@ -10,6 +10,7 @@ Provides extractors for:
 from .pdf import PDFExtractor, extract_text as extract_pdf_text
 from .epub import EPUBExtractor, extract_text as extract_epub_text
 from .mobi import MOBIExtractor, extract_text as extract_mobi_text
+from .txt import TXTExtractor, extract_text as extract_txt_text
 from pathlib import Path
 from typing import List
 from loguru import logger
@@ -18,6 +19,7 @@ __all__ = [
     "PDFExtractor",
     "EPUBExtractor", 
     "MOBIExtractor",
+    "TXTExtractor",
     "extract_text",
     "get_extractor_for_file",
 ]
@@ -31,6 +33,7 @@ EXTRACTORS = {
     '.azw3': MOBIExtractor,
     '.azw4': MOBIExtractor,
     '.prc': MOBIExtractor,
+    '.txt': TXTExtractor,
 }
 
 # Format to extract function mapping
@@ -42,6 +45,7 @@ EXTRACT_FUNCTIONS = {
     '.azw3': extract_mobi_text,
     '.azw4': extract_mobi_text,
     '.prc': extract_mobi_text,
+    '.txt': extract_txt_text,
 }
 
 
