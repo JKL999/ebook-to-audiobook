@@ -1,0 +1,15 @@
+{
+  "model_type": "GPT-SoVITS",
+  "version": "v2",
+  "training_info": {
+    "voice_sample": "desktop_agent_voice_sample.wav",
+    "training_date": "2025-06-28 15:01:00",
+    "device": "RTX 3070",
+    "agent": "Desktop Agent"
+  },
+  "model_config": {
+    "sample_rate": 22050,
+    "hop_length": 256,
+    "n_mel": 80
+  }
+}
