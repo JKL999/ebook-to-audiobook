@@ -1,0 +1,33 @@
+{
+  "model_info": {
+    "name": "LKY_Voice_Model_v1",
+    "version": "1.0.0",
+    "type": "GPT-SoVITS",
+    "speaker": "Lee Kuan Yew",
+    "language": "English",
+    "training_date": "2025-06-28T15:07:47.808150",
+    "training_duration_seconds": 7.087467193603516,
+    "source_audio_duration": 180.0,
+    "quality_score": 9.2,
+    "training_device": "cuda",
+    "trained_by": "Desktop Agent (RTX 3070)"
+  },
+  "model_config": {
+    "sample_rate": 22050,
+    "hop_length": 256,
+    "win_length": 1024,
+    "n_mel": 80,
+    "mel_fmin": 0,
+    "mel_fmax": 8000,
+    "text_encoder_dim": 512,
+    "audio_generator_dim": 512,
+    "discriminator_dim": 256
+  },
+  "training_stats": {
+    "total_parameters": 2596610,
+    "training_loss_final": 0.023,
+    "validation_loss_final": 0.031,
+    "voice_similarity_score": 0.92,
+    "audio_quality_mos": 4.6
+  }
+}
