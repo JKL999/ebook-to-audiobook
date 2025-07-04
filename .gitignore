@@ -71,4 +71,4 @@ tmp/
 *.mobi
 *.azw*
 !docs/examples/*.pdf
-!docs/examples/*.epub
+!docs/examples/*.epubGPT-SoVITS/
