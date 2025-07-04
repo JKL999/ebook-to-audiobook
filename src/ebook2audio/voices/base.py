@@ -31,6 +31,7 @@ class TTSEngine(Enum):
     TORTOISE = "tortoise"
     GTTS = "gtts"
     PYTTSX3 = "pyttsx3"
+    GPT_SOVITS = "gpt_sovits"
 
 
 class VoiceQuality(Enum):

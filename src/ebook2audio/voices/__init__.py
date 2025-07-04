@@ -68,6 +68,12 @@ def _initialize_providers(voice_manager: VoiceManager) -> None:
         system_provider = SystemTTSProvider()
         if system_provider.initialize():
             voice_manager.register_provider(system_provider)
+        
+        # Import and register GPT-SoVITS provider
+        from .gpt_sovits_provider import GPTSoVITSProvider
+        gpt_sovits_provider = GPTSoVITSProvider()
+        if gpt_sovits_provider.initialize():
+            voice_manager.register_provider(gpt_sovits_provider)
             
     except Exception as e:
         from loguru import logger
