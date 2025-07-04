@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/tim/Projects/ebook-to-audiobook/venv/bin/python3
 # -*- coding: utf-8 -*-
 import re
 import sys

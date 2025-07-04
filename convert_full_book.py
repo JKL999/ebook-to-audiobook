@@ -74,7 +74,7 @@ def convert_book_to_audiobook(
         # Configure the pipeline for optimal performance
         config = ConversionConfig(
             # TTS settings
-            voice_id="gtts_en_us",  # Google TTS English US
+            voice_id="lky_en_trained",  # LKY Trained Voice
             speaking_rate=1.0,      # Normal speed
             volume=0.9,
             

@@ -135,11 +135,20 @@ class VoiceMetadata:
     def from_dict(cls, data: Dict[str, Any]) -> 'VoiceMetadata':
         """Create VoiceMetadata from dictionary."""
         # Convert datetime strings back to datetime objects
-        if 'created_at' in data and data['created_at']:
+        if 'created_at' in data and isinstance(data['created_at'], str):
             data['created_at'] = datetime.fromisoformat(data['created_at'])
-        if 'trained_at' in data and data['trained_at']:
+        if 'trained_at' in data and isinstance(data['trained_at'], str):
             data['trained_at'] = datetime.fromisoformat(data['trained_at'])
-            
+
+        # Handle GPT-SoVITS specific paths from engine_config
+        if data.get('engine') == TTSEngine.GPT_SOVITS.value and 'engine_config' in data:
+            engine_cfg = data['engine_config']
+            if 'gpt_model_path' in engine_cfg:
+                data['model_path'] = engine_cfg['gpt_model_path']
+            if 'ref_audio_path' in engine_cfg:
+                data['sample_audio_path'] = engine_cfg['ref_audio_path']
+            # sovits_model_path remains in engine_config
+
         return cls(**data)
     
     def is_available(self) -> bool:

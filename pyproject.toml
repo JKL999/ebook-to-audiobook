@@ -44,17 +44,28 @@ aiofiles = "^23.0.0"
 pydantic = "^2.0.0"
 pydantic-settings = "^2.0.0"
 # Optional TTS engines (install with poetry install -E xtts)
-coqui-tts = {version = "^0.22.0", optional = true}
-bark = {version = "^0.1.0", optional = true}
-openvoice = {version = "^0.1.4", optional = true}
-tortoise-tts = {version = "^2.0.0", optional = true}
+soundfile = "^0.13.1"
+torch = "^2.7.1"
+librosa = "^0.11.0"
+torchaudio = "^2.7.1"
+tqdm = "^4.67.1"
+ffmpeg-python = "^0.2.0"
+peft = "^0.16.0"
+transformers = "^4.53.1"
+pytorch-lightning = "^2.5.2"
+einops = "^0.8.1"
+jieba = "^0.42.1"
+fast-langdetect = "^0.3.2"
+
+
+
 
 [tool.poetry.extras]
 xtts = ["coqui-tts"]
 bark = ["bark"]
 openvoice = ["openvoice"]
 tortoise = ["tortoise-tts"]
-all-tts = ["coqui-tts", "bark", "openvoice", "tortoise-tts"]
+all-tts = ["coqui-tts"]
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"
