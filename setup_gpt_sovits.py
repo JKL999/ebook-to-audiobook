@@ -20,14 +20,14 @@ def run_command(cmd, cwd=None):
 
 def setup_pretrained_models():
     """Download and setup pretrained models"""
-    base_dir = Path("/home/tim/Projects/ebook-to-audiobook/GPT-SoVITS")
+    base_dir = Path(__file__).parent / "GPT-SoVITS"
     pretrained_dir = base_dir / "GPT_SoVITS" / "pretrained_models"
     
     # Create directories
     pretrained_dir.mkdir(parents=True, exist_ok=True)
     
     # We'll use the existing pretrained models from our LKY inference directory
-    lky_pretrained = Path("/home/tim/Projects/ebook-to-audiobook/lky_audiobook_inference/pretrained_models")
+    lky_pretrained = Path(__file__).parent / "lky_audiobook_inference" / "pretrained_models"
     
     if lky_pretrained.exists():
         print("Copying existing pretrained models from LKY inference...")
@@ -64,7 +64,7 @@ def setup_pretrained_models():
 
 def setup_training_config():
     """Create training configuration for LKY voice"""
-    config_path = Path("/home/tim/Projects/ebook-to-audiobook/GPT-SoVITS/GPT_SoVITS/configs/lky_training.yaml")
+    config_path = Path(__file__).parent / "GPT-SoVITS" / "GPT_SoVITS" / "configs" / "lky_training.yaml"
     
     config_content = """
 # LKY Voice Training Configuration
@@ -101,7 +101,8 @@ if __name__ == "__main__":
     print("Setting up GPT-SoVITS for LKY voice training...")
     
     # Change to GPT-SoVITS directory
-    os.chdir("/home/tim/Projects/ebook-to-audiobook/GPT-SoVITS")
+    gpt_sovits_dir = Path(__file__).parent / "GPT-SoVITS"
+    os.chdir(gpt_sovits_dir)
     
     # Setup pretrained models
     setup_pretrained_models()

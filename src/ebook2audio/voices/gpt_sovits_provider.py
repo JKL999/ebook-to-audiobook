@@ -15,13 +15,18 @@ import numpy as np
 import soundfile as sf
 from loguru import logger
 
-# Add LKY custom inference script path
-lky_inference_script = Path(__file__).parent.parent.parent.parent / "lky_audiobook_inference" / "inference.py"
-logger.info(f"Looking for LKY inference script at: {lky_inference_script}")
-logger.info(f"Script exists: {lky_inference_script.exists()}")
+# Get project root directory
+PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
+GPT_SOVITS_DIR = PROJECT_ROOT / "GPT-SoVITS"
+INFERENCE_CLI = GPT_SOVITS_DIR / "GPT_SoVITS" / "inference_cli.py"
 
-# Use subprocess approach to call the working standalone inference
-GPT_SOVITS_AVAILABLE = lky_inference_script.exists()
+logger.info(f"Project root: {PROJECT_ROOT}")
+logger.info(f"GPT-SoVITS dir: {GPT_SOVITS_DIR}")
+logger.info(f"Inference CLI: {INFERENCE_CLI}")
+logger.info(f"Inference CLI exists: {INFERENCE_CLI.exists()}")
+
+# Check if GPT-SoVITS is available
+GPT_SOVITS_AVAILABLE = INFERENCE_CLI.exists()
 
 from .base import BaseTTSProvider, Voice, VoiceMetadata, TTSEngine
 
@@ -37,9 +42,13 @@ class GPTSoVITSProvider(BaseTTSProvider):
     def __init__(self):
         """Initialize GPT-SoVITS provider."""
         super().__init__(TTSEngine.GPT_SOVITS)
-        self.inference_script_path: Optional[Path] = None
+        self.inference_cli_path: Optional[Path] = None
         self.current_voice_id: Optional[str] = None
         self.model_cache: Dict[str, Any] = {}
+        # Model paths for LKY voice
+        self.s1_model_path: Optional[Path] = None
+        self.s2_model_path: Optional[Path] = None
+        self.ref_audio_path: Optional[Path] = None
         
     def initialize(self) -> bool:
         """
@@ -49,16 +58,42 @@ class GPTSoVITSProvider(BaseTTSProvider):
             bool: True if initialization successful
         """
         if not GPT_SOVITS_AVAILABLE:
-            logger.error("LKY inference script not available")
+            logger.error("GPT-SoVITS inference CLI not available")
             return False
             
         try:
-            self.inference_script_path = lky_inference_script
+            self.inference_cli_path = INFERENCE_CLI
+            
+            # Set up model paths for LKY voice
+            logs_dir = GPT_SOVITS_DIR / "logs/lky_en_enhanced"
+            
+            # Find the enhanced S1 model
+            s1_models = list(logs_dir.glob("**/*e50.ckpt"))
+            if not s1_models:
+                s1_models = list(logs_dir.glob("**/*.ckpt"))
+            
+            if s1_models:
+                self.s1_model_path = max(s1_models, key=os.path.getctime)
+                logger.info(f"Found S1 model: {self.s1_model_path}")
+            else:
+                logger.error("No S1 models found")
+                return False
+            
+            # Use pretrained S2 model
+            self.s2_model_path = GPT_SOVITS_DIR / "GPT_SoVITS/pretrained_models/gsv-v2final-pretrained/s2G2333k.pth"
+            if not self.s2_model_path.exists():
+                logger.error(f"S2 model not found: {self.s2_model_path}")
+                return False
+            
+            # Set default reference audio (must be 3-10 seconds)
+            # Using trimmed 5-second version of segment 0125
+            self.ref_audio_path = GPT_SOVITS_DIR / "output/lky_training_data_enhanced/audio_segments/lky_segment_0125_5sec.wav"
+            
             self._initialized = True
-            logger.info("LKY GPT-SoVITS provider initialized with subprocess approach")
+            logger.info("GPT-SoVITS provider initialized successfully")
             return True
         except Exception as e:
-            logger.error(f"Failed to initialize LKY GPT-SoVITS: {e}")
+            logger.error(f"Failed to initialize GPT-SoVITS: {e}")
             return False
     
     def is_available(self) -> bool:
@@ -95,7 +130,7 @@ class GPTSoVITSProvider(BaseTTSProvider):
     
     def synthesize(self, text: str, voice: Voice, output_path: Optional[Path] = None) -> Optional[Path]:
         """
-        Synthesize speech using LKY inference script via subprocess.
+        Synthesize speech using GPT-SoVITS inference CLI via subprocess.
         
         Args:
             text: Text to synthesize
@@ -105,59 +140,111 @@ class GPTSoVITSProvider(BaseTTSProvider):
         Returns:
             Path to generated audio file, or None if synthesis failed
         """
-        if not self.is_available() or not self.inference_script_path:
-            logger.error("LKY inference script not available")
+        if not self.is_available() or not self.inference_cli_path:
+            logger.error("GPT-SoVITS inference CLI not available")
+            return None
+            
+        if not all([self.s1_model_path, self.s2_model_path, self.ref_audio_path]):
+            logger.error("Model paths not properly initialized")
             return None
             
         try:
             # Generate output path if not provided
             if output_path is None:
-                temp_dir = Path(tempfile.gettempdir()) / "lky_audio"
+                temp_dir = Path(tempfile.gettempdir()) / "gpt_sovits_audio"
                 temp_dir.mkdir(exist_ok=True)
                 output_path = temp_dir / f"lky_{voice.voice_id}_{hash(text)}.wav"
             
             # Ensure output directory exists
             output_path.parent.mkdir(parents=True, exist_ok=True)
             
-            # Run the LKY inference script via subprocess
-            logger.info(f"Synthesizing {len(text)} characters with LKY voice via subprocess")
+            # Run the GPT-SoVITS inference CLI via subprocess
+            logger.info(f"Synthesizing {len(text)} characters with GPT-SoVITS")
+            
+            # Set up environment variables
+            env = os.environ.copy()
+            env['PYTHONPATH'] = f"{GPT_SOVITS_DIR}:{GPT_SOVITS_DIR}/GPT_SoVITS"
+            
+            # Build command using the actual inference_cli.py argument names
+            # First, create temporary text files for ref_text and target_text
+            import tempfile
+            
+            ref_text = "The odds were against our survival, and we had to ensure our own existence, which we had previously taken for granted."
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as ref_file:
+                ref_file.write(ref_text)
+                ref_text_path = ref_file.name
+                
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as target_file:
+                target_file.write(text)
+                target_text_path = target_file.name
             
             cmd = [
-                "python3", str(self.inference_script_path),
-                "--text", text,
-                "--output", str(output_path)
+                "python3", str(self.inference_cli_path),
+                "--gpt_model", str(self.s1_model_path),
+                "--sovits_model", str(self.s2_model_path),
+                "--ref_audio", str(self.ref_audio_path),
+                "--ref_text", ref_text_path,
+                "--ref_language", "英文",
+                "--target_text", target_text_path,
+                "--target_language", "英文",
+                "--output_path", str(output_path.parent)  # It expects a directory
             ]
             
-            # Change to the inference script directory for proper imports
-            inference_dir = self.inference_script_path.parent
-            
-            result = subprocess.run(
-                cmd,
-                cwd=str(inference_dir),
-                capture_output=True,
-                text=True,
-                timeout=60  # 60 second timeout
-            )
-            
-            if result.returncode != 0:
-                logger.error(f"LKY inference failed with return code {result.returncode}")
-                logger.error(f"stderr: {result.stderr}")
-                logger.error(f"stdout: {result.stdout}")
-                return None
-            
-            # Check if output file was created
-            if not output_path.exists():
-                logger.error(f"Output file not created: {output_path}")
-                return None
-            
-            logger.info(f"LKY audio synthesis successful: {output_path}")
-            return output_path
+            try:
+                result = subprocess.run(
+                    cmd,
+                    cwd=str(GPT_SOVITS_DIR),
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                    timeout=120  # 2 minute timeout for longer texts
+                )
+                
+                if result.returncode != 0:
+                    logger.error(f"GPT-SoVITS inference failed with return code {result.returncode}")
+                    logger.error(f"stderr: {result.stderr}")
+                    logger.error(f"stdout: {result.stdout}")
+                    return None
+                
+                # Log stdout for debugging even on success
+                logger.info(f"Command completed with return code: {result.returncode}")
+                logger.info(f"stdout: {result.stdout}")
+                
+                # The inference_cli.py saves as ./output.wav relative to the working directory
+                actual_output = GPT_SOVITS_DIR / "output.wav"
+                
+                # Check if output file was created
+                if not actual_output.exists():
+                    logger.error(f"Output file not created: {actual_output}")
+                    # Check if it's in the specified output path directory
+                    output_in_dir = Path(str(output_path.parent)) / "output.wav"
+                    if output_in_dir.exists():
+                        logger.info(f"Found output at: {output_in_dir}")
+                        actual_output = output_in_dir
+                    else:
+                        logger.error(f"No output.wav found in working directory or output directory")
+                        return None
+                
+                # Move to the expected location
+                if actual_output != output_path:
+                    actual_output.rename(output_path)
+                
+                logger.info(f"GPT-SoVITS synthesis successful: {output_path}")
+                return output_path
+                
+            finally:
+                # Clean up temporary files
+                try:
+                    os.unlink(ref_text_path)
+                    os.unlink(target_text_path)
+                except:
+                    pass
             
         except subprocess.TimeoutExpired:
-            logger.error("LKY inference timed out after 60 seconds")
+            logger.error("GPT-SoVITS inference timed out after 120 seconds")
             return None
         except Exception as e:
-            logger.error(f"LKY synthesis failed: {e}")
+            logger.error(f"GPT-SoVITS synthesis failed: {e}")
             import traceback
             traceback.print_exc()
             return None
@@ -253,7 +340,10 @@ class GPTSoVITSProvider(BaseTTSProvider):
     
     def cleanup(self):
         """Clean up resources."""
-        self.inference_script_path = None
+        self.inference_cli_path = None
+        self.s1_model_path = None
+        self.s2_model_path = None
+        self.ref_audio_path = None
         self.model_cache.clear()
         self.current_voice_id = None
         self._initialized = False

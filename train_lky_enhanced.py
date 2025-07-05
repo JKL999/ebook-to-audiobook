@@ -28,7 +28,7 @@ def run_command(cmd, cwd=None, env=None):
 
 def prepare_enhanced_training_environment():
     """Prepare the enhanced training environment"""
-    base_dir = Path("/home/tim/Projects/ebook-to-audiobook/GPT-SoVITS")
+    base_dir = Path(__file__).parent / "GPT-SoVITS"
     
     # Set environment variables for enhanced dataset
     env_vars = {
@@ -55,7 +55,7 @@ def prepare_enhanced_training_environment():
 
 def prepare_enhanced_dataset():
     """Run dataset preparation steps with enhanced data"""
-    base_dir = Path("/home/tim/Projects/ebook-to-audiobook/GPT-SoVITS")
+    base_dir = Path(__file__).parent / "GPT-SoVITS"
     env_vars = prepare_enhanced_training_environment()
     
     print("Step 1: Text preprocessing...")
@@ -87,7 +87,7 @@ def prepare_enhanced_dataset():
 
 def create_enhanced_s1_config():
     """Create S1 training config for enhanced dataset"""
-    base_dir = Path("/home/tim/Projects/ebook-to-audiobook/GPT-SoVITS")
+    base_dir = Path(__file__).parent / "GPT-SoVITS"
     config_path = base_dir / "GPT_SoVITS/configs/lky_enhanced_s1_config.yaml"
     
     config_content = """train_semantic_path: logs/lky_en_enhanced/6-name2semantic-0.tsv
@@ -146,7 +146,7 @@ inference:
 
 def train_enhanced_s1_model():
     """Train Stage 1 (GPT) model with enhanced dataset"""
-    base_dir = Path("/home/tim/Projects/ebook-to-audiobook/GPT-SoVITS")
+    base_dir = Path(__file__).parent / "GPT-SoVITS"
     env_vars = prepare_enhanced_training_environment()
     
     print("Training Enhanced Stage 1 (GPT) model...")
@@ -178,7 +178,7 @@ def train_enhanced_s1_model():
 
 def train_enhanced_s2_model():
     """Train Stage 2 (SoVITS) model with enhanced dataset"""
-    base_dir = Path("/home/tim/Projects/ebook-to-audiobook/GPT-SoVITS")
+    base_dir = Path(__file__).parent / "GPT-SoVITS"
     env_vars = prepare_enhanced_training_environment()
     
     print("Training Enhanced Stage 2 (SoVITS) model...")
@@ -206,7 +206,7 @@ def train_enhanced_s2_model():
 
 def test_enhanced_model():
     """Test the enhanced trained model"""
-    base_dir = Path("/home/tim/Projects/ebook-to-audiobook/GPT-SoVITS")
+    base_dir = Path(__file__).parent / "GPT-SoVITS"
     
     # Find the latest trained models
     logs_dir = base_dir / "logs/lky_en_enhanced"
@@ -262,7 +262,7 @@ def main():
     print("=" * 60)
     
     # Check if we have enhanced training data
-    base_dir = Path("/home/tim/Projects/ebook-to-audiobook/GPT-SoVITS")
+    base_dir = Path(__file__).parent / "GPT-SoVITS"
     training_list = base_dir / "output/lky_training_data_enhanced/lky_training_list.txt"
     audio_dir = base_dir / "output/lky_training_data_enhanced/audio_segments"
     

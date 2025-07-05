@@ -28,7 +28,7 @@ def run_command(cmd, cwd=None, env=None):
 
 def prepare_enhanced_training_environment():
     """Prepare the enhanced training environment"""
-    base_dir = Path("/home/tim/Projects/ebook-to-audiobook/GPT-SoVITS")
+    base_dir = Path(__file__).parent / "GPT-SoVITS"
     
     # Set environment variables for enhanced dataset
     env_vars = {
@@ -55,7 +55,7 @@ def prepare_enhanced_training_environment():
 
 def train_enhanced_s2_model():
     """Train Stage 2 (SoVITS) model with enhanced dataset"""
-    base_dir = Path("/home/tim/Projects/ebook-to-audiobook/GPT-SoVITS")
+    base_dir = Path(__file__).parent / "GPT-SoVITS"
     env_vars = prepare_enhanced_training_environment()
     
     print("Training Enhanced Stage 2 (SoVITS) model...")
@@ -63,7 +63,7 @@ def train_enhanced_s2_model():
     # Additional training parameters for S2
     env_vars.update({
         "total_epoch": "50", 
-        "batch_size": "4",
+        "batch_size": "1",  # Reduced from 4 to 1 for memory optimization
         "lr": "0.0002",
         "if_cache_data_in_gpu": "False",
         "if_save_latest": "True",
@@ -85,7 +85,7 @@ def train_enhanced_s2_model():
 
 def test_enhanced_model():
     """Test the enhanced trained model"""
-    base_dir = Path("/home/tim/Projects/ebook-to-audiobook/GPT-SoVITS")
+    base_dir = Path(__file__).parent / "GPT-SoVITS"
     
     # Find the latest trained models
     logs_dir = base_dir / "logs/lky_en_enhanced"
@@ -149,7 +149,7 @@ def main():
     print("🎵 Starting Enhanced S2 (SoVITS) Training")
     print("=" * 50)
     
-    base_dir = Path("/home/tim/Projects/ebook-to-audiobook/GPT-SoVITS")
+    base_dir = Path(__file__).parent / "GPT-SoVITS"
     
     # Change to GPT-SoVITS directory
     os.chdir(base_dir)
