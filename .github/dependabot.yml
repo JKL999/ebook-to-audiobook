@@ -1,0 +1,126 @@
+# Dependabot config — batches security alerts into ~5 grouped PRs.
+#
+# Background: this repo accumulated 50 open Dependabot security alerts (1 critical,
+# 15 high, 21 medium, 13 low) because automated-security-fixes was off and there was
+# no config file. The combination of (a) enabling automated-security-fixes and (b)
+# this file's grouping rules yields ~5 batched PRs instead of 50 individual ones.
+#
+# Grouping strategy: by package family, matching the actual alert distribution.
+# Counts as of 2026-05-13:
+#   http-stack     (aiohttp 19, urllib3 4, requests 1)            = 24 alerts
+#   ml-stack       (nltk 7, transformers 1, torch 1)              =  9 alerts
+#   media          (pillow 6, lxml 1)                             =  7 alerts
+#   tooling        (filelock 2, python-dotenv 1, pytest 1, Pygments 1, black 1, virtualenv 1) = 7 alerts
+#   security-libs  (cryptography 3)                               =  3 alerts
+#
+# Patterns are intentionally broader than today's alert list so future advisories in
+# related packages fall into the right group without config churn.
+#
+# `open-pull-requests-limit: 0` suppresses non-security version-update PRs — we
+# only want grouped security PRs here, not weekly noise across 250+ deps.
+
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Seoul"
+    open-pull-requests-limit: 0
+    labels:
+      - "dependencies"
+      - "security"
+    groups:
+      http-stack:
+        applies-to: security-updates
+        patterns:
+          - "aiohttp*"
+          - "urllib3"
+          - "requests"
+          - "httpx"
+          - "yarl"
+          - "multidict"
+          - "frozenlist"
+          - "aiosignal"
+          - "aiohappyeyeballs"
+          - "async-timeout"
+      security-libs:
+        applies-to: security-updates
+        patterns:
+          - "cryptography"
+          - "certifi"
+          - "pyopenssl"
+          - "cffi"
+          - "pycparser"
+          - "charset-normalizer"
+          - "idna"
+      ml-stack:
+        applies-to: security-updates
+        patterns:
+          - "torch*"
+          - "transformers"
+          - "tokenizers"
+          - "nltk"
+          - "peft"
+          - "pytorch-lightning"
+          - "lightning-utilities"
+          - "huggingface-hub"
+          - "hf-xet"
+          - "accelerate"
+          - "safetensors"
+          - "scikit-learn"
+          - "scipy"
+          - "numpy"
+          - "numba"
+          - "llvmlite"
+          - "sympy"
+          - "networkx"
+      media:
+        applies-to: security-updates
+        patterns:
+          - "pillow"
+          - "lxml"
+          - "pymupdf"
+          - "pikepdf"
+          - "img2pdf"
+          - "ocrmypdf"
+          - "pdfminer*"
+          - "pi-heif"
+          - "librosa"
+          - "soundfile"
+          - "soxr"
+          - "audioread"
+          - "pydub"
+          - "ffmpeg-python"
+          - "ebooklib"
+          - "gtts"
+          - "pyttsx3"
+      tooling:
+        applies-to: security-updates
+        patterns:
+          - "black"
+          - "ruff"
+          - "isort"
+          - "mypy*"
+          - "pytest*"
+          - "pre-commit"
+          - "filelock"
+          - "virtualenv"
+          - "python-dotenv"
+          - "pygments"
+          - "Pygments"
+          - "coverage"
+          - "click"
+          - "typer"
+          - "rich"
+          - "tqdm"
+          - "pydantic*"
+          - "jinja2"
+          - "markupsafe"
+          - "packaging"
+          - "platformdirs"
+          - "setuptools"
+          - "wheel"
+          - "pip"
