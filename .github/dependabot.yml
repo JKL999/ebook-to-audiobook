@@ -29,6 +29,11 @@ updates:
       time: "09:00"
       timezone: "Asia/Seoul"
     open-pull-requests-limit: 0
+    # Holds for majors we know break this repo. Security alerts for these versions
+    # still surface in the UI; Dependabot just won't auto-bundle them into a PR.
+    ignore:
+      - dependency-name: "transformers"
+        update-types: ["version-update:semver-major"]
     labels:
       - "dependencies"
       - "security"
